@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MGD Smart Ordering</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { 
+            font-family: 'Calibri', 'Candara', 'Segoe UI', 'Optima', Arial, sans-serif; 
+            -webkit-font-smoothing: antialiased; 
+            color: black;
+        }
+        
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .tab-active {
+            background-color: #9333ea;
+            color: white;
+            border-radius: 9999px;
+        }
+        .tab-inactive {
+            color: black;
+        }
+        
+        .on-hand-pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 11px;
+        }
+        .on-hand-normal { background-color: #F1F5F9; color: black; }
+        .on-hand-zero { background-color: #FEF2F2; color: #EF4444; }
+
+        .suggested-highlight {
+            color: #D97706;
+            font-size: 15px;
+            font-weight: 900;
+        }
+
+        #category-dropdown, #wrench-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            margin-top: 4px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            z-index: 100;
+        }
+
+        #category-dropdown {
+            left: 50%;
+            transform: translateX(-50%);
+            width: 220px;
+            max-height: 350px;
+            overflow-y: auto;
+        }
+
+        #wrench-dropdown {
+            right: 0;
+            width: 190px;
+        }
+
+        #category-dropdown.show, #wrench-dropdown.show {
+            display: block;
+        }
+
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+        }
+        .accordion-content.expanded {
+            max-height: 5000px;
+        }
+        .rotate-180 {
+            transform: rotate(180deg);
+        }
+        
+        th, td { padding: 8px 12px !important; }
+        tr { line-height: 1.2; }
+
+        .dropdown-item {
+            width: 100%;
+            text-align: left;
+            padding: 8px 12px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        .dropdown-item:hover {
+            background-color: #f1f5f9;
+            color: #2563eb;
+        }
+        .dropdown-divider {
+            height: 1px;
+            background-color: #f1f5f9;
+            margin: 4px 0;
+        }
+    </style>
+</head>
+<body class="bg-[#F4F7FE] min-h-screen">
+    <div id="app" class="pb-4">
+        <!-- HEADER -->
+        <header class="bg-[#0F172A] px-4 py-2 flex items-center justify-between text-white">
+            <div class="flex items-center gap-4">
+                <i data-lucide="shopping-cart" class="w-5 h-5 text-purple-400"></i>
+                <nav class="hidden md:flex items-center gap-4 text-[13px] font-bold">
+                    <span class="flex items-center gap-1 cursor-pointer hover:text-white">My Apps <i data-lucide="chevron-down" class="w-3 h-3"></i></span>
+                    <span class="cursor-pointer hover:text-white">Dashboard</span>
+                    <span class="text-white border-b-2 border-purple-500 pb-0.5">Ordering</span>
+                    <span class="flex items-center gap-1 cursor-pointer hover:text-white">Costa Mesa <i data-lucide="chevron-down" class="w-3 h-3"></i></span>
+                </nav>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-1 bg-slate-800 px-2 py-1 rounded">
+                    <span class="text-[11px] font-bold">Corporate</span>
+                    <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                </div>
+                <i data-lucide="settings" class="w-4 h-4 text-slate-400 cursor-pointer"></i>
+                <div class="w-7 h-7 rounded-full bg-blue-500 border border-slate-700"></div>
+            </div>
+        </header>
+
+        <main class="p-3 max-w-[1600px] mx-auto">
+            
+            <!-- VIEW: MAIN DASHBOARD -->
+            <div id="view-dashboard">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-1">
+                        <button onclick="setTab('suppliers')" id="tab-suppliers" class="tab-active px-3 py-1 flex items-center gap-1.5 text-[12px] font-bold transition-all">
+                            <i data-lucide="truck" class="w-3.5 h-3.5"></i> Suppliers
+                        </button>
+                        <button onclick="setTab('guides')" id="tab-guides" class="tab-inactive px-3 py-1 flex items-center gap-1.5 text-[12px] font-bold transition-all hover:bg-slate-200 hover:rounded-full">
+                            <i data-lucide="shopping-bag" class="w-3.5 h-3.5"></i> Order Guides
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <div onclick="showReviewScreen()" class="flex items-center gap-2 px-3 py-1 bg-white rounded-full border border-slate-200 shadow-sm cursor-pointer hover:border-amber-400 transition-all group">
+                            <div class="flex flex-col items-end">
+                                <span class="text-[8px] text-amber-600 uppercase font-black leading-none">Suggested Order</span>
+                                <span class="text-[10px] text-black font-bold leading-none group-hover:underline">Click Review</span>
+                            </div>
+                            <div class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></div>
+                        </div>
+
+                        <div onclick="showReviewScreen()" class="flex items-center gap-3 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm cursor-pointer hover:border-purple-400 transition-all group">
+                            <div class="flex flex-col items-end">
+                                <span id="cart-total-header" class="text-[12px] font-black text-black leading-none">$0.00</span>
+                                <span id="cart-count-header" class="text-[8px] text-slate-500 font-bold leading-none uppercase">0 Items</span>
+                            </div>
+                            <div class="p-1 bg-slate-50 rounded-full group-hover:bg-purple-50">
+                                <i data-lucide="shopping-basket" class="w-3.5 h-3.5 text-black group-hover:text-purple-600"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-2 mb-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div id="main-selector-container" class="w-48">
+                            <select id="primary-select" onchange="handleSelectionChange(this.value)" class="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[13px] font-bold text-black outline-none focus:ring-1 focus:ring-purple-200 cursor-pointer">
+                            </select>
+                        </div>
+
+                        <div class="relative w-56">
+                            <button onclick="toggleCategoryDropdown()" class="flex items-center justify-between w-full bg-white border border-slate-200 rounded-full px-4 py-1 text-[12px] font-bold text-black outline-none cursor-pointer hover:border-blue-400">
+                                <span id="category-filter-label" class="truncate">All Categories</span>
+                                <i data-lucide="filter" class="w-3 h-3 text-blue-500 flex-shrink-0 ml-2"></i>
+                            </button>
+                            <div id="category-dropdown" class="p-1">
+                                <div class="flex items-center justify-between p-1.5 mb-1 border-b border-slate-50">
+                                    <button onclick="selectAllCategories(true)" class="text-[9px] font-black text-blue-600 uppercase">Select All</button>
+                                    <button onclick="selectAllCategories(false)" class="text-[9px] font-black text-slate-400 uppercase">Clear</button>
+                                </div>
+                                <div id="category-options-list"></div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-1.5">
+                            <button class="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded-full text-[11px] font-bold text-white shadow-sm">
+                                <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Last Order
+                            </button>
+                            <button onclick="addAllSuggested()" class="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded-full text-[11px] font-bold text-white shadow-sm">
+                                <i data-lucide="plus" class="w-3 h-3"></i> Add All
+                            </button>
+                            
+                            <div class="relative" id="wrench-container">
+                                <button id="wrench-btn" onclick="toggleWrenchDropdown()" class="p-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-black border border-slate-200 transition-colors">
+                                    <i data-lucide="wrench" class="w-3.5 h-3.5"></i>
+                                </button>
+                                <div id="wrench-dropdown" class="py-1">
+                                    <button onclick="downloadAction('CSV')" class="dropdown-item">
+                                        <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-green-600"></i> Download CSV
+                                    </button>
+                                    <button onclick="downloadAction('PDF')" class="dropdown-item">
+                                        <i data-lucide="file-text" class="w-3.5 h-3.5 text-red-600"></i> Download PDF
+                                    </button>
+                                    <div class="dropdown-divider"></div>
+                                    <button onclick="downloadAction('Blank CSV')" class="dropdown-item">
+                                        <i data-lucide="table" class="w-3.5 h-3.5 text-slate-400"></i> Download Blank CSV
+                                    </button>
+                                    <button onclick="downloadAction('Blank PDF')" class="dropdown-item">
+                                        <i data-lucide="file-minus" class="w-3.5 h-3.5 text-slate-400"></i> Download Blank PDF
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr class="text-[10px] font-black text-black uppercase tracking-tight">
+                                <th class="p-2">Category</th>
+                                <th class="p-2">Description</th>
+                                <th class="p-2 text-center">Price</th>
+                                <th class="p-2 text-center">On Hand</th>
+                                <th class="p-2 text-center">UPT</th>
+                                <th class="p-2 text-center">Avg. Order</th>
+                                <th class="p-2 text-center">Sug. Qty</th>
+                                <th class="p-2 text-center">Qty</th>
+                                <th class="p-2 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="product-list" class="divide-y divide-slate-100 text-[12px] text-black"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- VIEW: REVIEW SCREEN -->
+            <div id="view-review" class="hidden">
+                <div class="mb-4">
+                    <button onclick="showDashboardScreen()" class="flex items-center gap-1 text-slate-500 hover:text-black font-bold text-[12px] mb-1">
+                        <i data-lucide="arrow-left" class="w-3 h-3"></i> Back to Catalog
+                    </button>
+                    <div class="flex justify-between items-end">
+                        <h1 class="text-xl font-black text-black tracking-tight">Review Order</h1>
+                        <p class="text-[11px] font-bold text-slate-400 italic">Adjust quantities below if needed</p>
+                    </div>
+                </div>
+                <div id="review-container" class="space-y-3"></div>
+                <div class="mt-4 flex justify-end">
+                    <button onclick="showDashboardScreen()" class="px-6 py-2 bg-white border border-slate-200 text-black rounded-lg font-black text-[13px] hover:bg-slate-50">Continue Shopping</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const PRODUCTS = [
+            // Original Items
+            { id: 1, category: 'Appetizers', description: 'Eggroll Chicken (50ct)', code: '210365', price: 26.98, onHandQty: 2, onHandLabel: '2 cs', upt: 0.07, avgOrder: 8.00, suggestedQty: 3, supplier: 'MSD', guide: 'Stocked Items' },
+            { id: 2, category: 'Beverage', description: 'Gourmet Hot Cocoa Mix', code: 'HOTCOCOA', price: 18.50, onHandQty: 0, onHandLabel: '0 units', upt: 0.03, avgOrder: '-', suggestedQty: 5, supplier: 'MSD', guide: 'Weekly Guide' },
+            { id: 3, category: 'Dry Goods', description: 'Yellow Cornmeal (25lb)', code: '1004603', price: 26.98, onHandQty: 1, onHandLabel: '1 bag', upt: 1.26, avgOrder: 2.00, suggestedQty: 1, supplier: 'MSD', guide: 'Stocked Items' },
+            { id: 4, category: 'Bakery', description: 'Brioche Buns (48ct)', code: '884521', price: 24.56, onHandQty: 5, onHandLabel: '5 cs', upt: 0.00, avgOrder: '-', suggestedQty: 2, supplier: 'MSD', guide: 'Monthly Inventory' },
+            { id: 5, category: 'Paper Goods', description: 'Facial Tissue (30ct)', code: '1206549', price: 20.00, onHandQty: 0, onHandLabel: '0 cs', upt: 0.06, avgOrder: 23.00, suggestedQty: 4, supplier: 'MSD', guide: 'Stocked Items' },
+            
+            // New MSD Data
+            { id: 9, category: 'Dairy', description: 'Heavy Cream 40%', code: '445210', price: 54.20, onHandQty: 3, onHandLabel: '3 cs', upt: 0.12, avgOrder: 4.00, suggestedQty: 2, supplier: 'MSD', guide: 'Stocked Items' },
+            { id: 10, category: 'Dry Goods', description: 'Granulated Sugar (50lb)', code: '107591', price: 32.15, onHandQty: 1, onHandLabel: '1 bag', upt: 0.45, avgOrder: 2.00, suggestedQty: 1, supplier: 'MSD', guide: 'Stocked Items' },
+            { id: 11, category: 'Meat', description: 'Bacon Applewood Smoked', code: '900882', price: 78.40, onHandQty: 0, onHandLabel: '0 cs', upt: 0.09, avgOrder: 5.00, suggestedQty: 3, supplier: 'MSD', guide: 'Weekly Guide' },
+            { id: 12, category: 'Seafood', description: 'Salmon Fillets 6oz', code: '332145', price: 145.00, onHandQty: 1, onHandLabel: '1 cs', upt: 0.02, avgOrder: 1.00, suggestedQty: 1, supplier: 'MSD', guide: 'Weekly Guide' },
+            
+            // Sysco Data
+            { id: 6, category: 'Produce', description: 'Yellow Onions (50lb)', code: '1094721', price: 30.54, onHandQty: 4, onHandLabel: '4 bags', upt: 0.00, avgOrder: '-', suggestedQty: 2, supplier: 'Sysco', guide: 'Weekly Guide' },
+            { id: 13, category: 'Produce', description: 'Iceberg Lettuce (24ct)', code: '110224', price: 42.10, onHandQty: 2, onHandLabel: '2 cs', upt: 0.15, avgOrder: 6.00, suggestedQty: 4, supplier: 'Sysco', guide: 'Weekly Guide' },
+            { id: 14, category: 'Produce', description: 'Roma Tomatoes (25lb)', code: '110335', price: 28.90, onHandQty: 1, onHandLabel: '1 cs', upt: 0.08, avgOrder: 3.00, suggestedQty: 2, supplier: 'Sysco', guide: 'Stocked Items' },
+            { id: 15, category: 'Meat', description: 'Ground Beef 80/20', code: '554001', price: 92.40, onHandQty: 2, onHandLabel: '2 cs', upt: 0.22, avgOrder: 10.00, suggestedQty: 5, supplier: 'Sysco', guide: 'Stocked Items' },
+            { id: 16, category: 'Chemicals', description: 'Dish Soap (4/1gal)', code: '778002', price: 45.60, onHandQty: 1, onHandLabel: '1 cs', upt: 0.01, avgOrder: 1.00, suggestedQty: 0, supplier: 'Sysco', guide: 'Monthly Inventory' },
+            
+            // US Foods Data
+            { id: 7, category: 'Food Cost', description: 'Icing Sugar Halal', code: '1075914', price: 7.00, onHandQty: 15, onHandLabel: '15 units', upt: 22.95, avgOrder: '-', suggestedQty: 10, supplier: 'US Foods', guide: 'Stocked Items' },
+            { id: 17, category: 'Dry Goods', description: 'All Purpose Flour', code: '200441', price: 24.50, onHandQty: 3, onHandLabel: '3 bags', upt: 0.33, avgOrder: 4.00, suggestedQty: 2, supplier: 'US Foods', guide: 'Stocked Items' },
+            { id: 18, category: 'Seafood', description: 'Shrimp 21/25 P&D', code: '330112', price: 88.20, onHandQty: 0, onHandLabel: '0 cs', upt: 0.05, avgOrder: 2.00, suggestedQty: 2, supplier: 'US Foods', guide: 'Weekly Guide' },
+            { id: 19, category: 'Beverage', description: 'Orange Juice (12/32oz)', code: '665001', price: 34.00, onHandQty: 4, onHandLabel: '4 cs', upt: 0.10, avgOrder: 3.00, suggestedQty: 0, supplier: 'US Foods', guide: 'Weekly Guide' },
+            { id: 20, category: 'Meat', description: 'Chicken Breast BNLS', code: '556221', price: 62.30, onHandQty: 2, onHandLabel: '2 cs', upt: 0.40, avgOrder: 12.00, suggestedQty: 8, supplier: 'US Foods', guide: 'Stocked Items' },
+            
+            // Mixed/Others
+            { id: 8, category: 'Meat', description: 'Pork Chops (Center Cut)', code: '1245614', price: 28.50, onHandQty: 0, onHandLabel: '0 cs', upt: 0.00, avgOrder: 11.00, suggestedQty: 10, supplier: 'MSD', guide: 'Stocked Items' },
+            { id: 21, category: 'Produce', description: 'Fresh Cilantro', code: '110005', price: 12.40, onHandQty: 5, onHandLabel: '5 units', upt: 0.05, avgOrder: 10.00, suggestedQty: 5, supplier: 'Sysco', guide: 'Weekly Guide' },
+            { id: 22, category: 'Dairy', description: 'Unsalted Butter (36lb)', code: '445330', price: 112.00, onHandQty: 1, onHandLabel: '1 cs', upt: 0.02, avgOrder: 1.00, suggestedQty: 1, supplier: 'MSD', guide: 'Stocked Items' },
+            { id: 23, category: 'Bakery', description: 'Tortilla Flour 10"', code: '884110', price: 29.50, onHandQty: 3, onHandLabel: '3 cs', upt: 0.18, avgOrder: 5.00, suggestedQty: 2, supplier: 'MSD', guide: 'Stocked Items' },
+            { id: 24, category: 'Appetizers', description: 'Mozzarella Sticks', code: '210556', price: 44.20, onHandQty: 0, onHandLabel: '0 cs', upt: 0.04, avgOrder: 3.00, suggestedQty: 3, supplier: 'US Foods', guide: 'Stocked Items' },
+            { id: 25, category: 'Paper Goods', description: 'To-Go Containers (200ct)', code: '120110', price: 38.00, onHandQty: 2, onHandLabel: '2 cs', upt: 0.11, avgOrder: 5.00, suggestedQty: 3, supplier: 'Sysco', guide: 'Monthly Inventory' }
+        ];
+
+        let cart = [];
+        let activeTab = 'suppliers';
+        let currentSelection = 'MSD';
+        let selectedCategories = [];
+
+        const SUPPLIERS = ['MSD', 'Sysco', 'US Foods'];
+        const GUIDES = ['Stocked Items', 'Monthly Inventory', 'Weekly Guide'];
+        const UNIQUE_CATEGORIES = [...new Set(PRODUCTS.map(p => p.category))].sort();
+        const DELIVERY_DATES = ['26 February', '28 February', '02 March'];
+
+        function initSuggestedOrder() {
+            cart = [];
+            selectedCategories = [...UNIQUE_CATEGORIES];
+            updateHeaderCart();
+            renderCategoryOptions();
+        }
+
+        function toggleCategoryDropdown() {
+            const drop = document.getElementById('category-dropdown');
+            const show = drop.classList.contains('show');
+            closeAllDropdowns();
+            if (!show) drop.classList.add('show');
+        }
+
+        function toggleWrenchDropdown() {
+            const drop = document.getElementById('wrench-dropdown');
+            const show = drop.classList.contains('show');
+            closeAllDropdowns();
+            if (!show) drop.classList.add('show');
+        }
+
+        function closeAllDropdowns() {
+            document.getElementById('category-dropdown').classList.remove('show');
+            document.getElementById('wrench-dropdown').classList.remove('show');
+        }
+
+        function toggleVendorAccordion(vendor) {
+            const vendorId = vendor.replace(/\s+/g, '-');
+            const content = document.getElementById(`vendor-content-${vendorId}`);
+            const icon = document.getElementById(`vendor-icon-${vendorId}`);
+            if (content) {
+                content.classList.toggle('expanded');
+                icon.classList.toggle('rotate-180');
+            }
+        }
+
+        function downloadAction(type) {
+            const msg = document.createElement('div');
+            msg.className = "fixed top-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-lg text-[12px] font-bold z-[200] flex items-center gap-2 shadow-xl animate-bounce";
+            msg.innerHTML = `<i data-lucide="download" class="w-4 h-4"></i> Generating ${type}...`;
+            document.body.appendChild(msg);
+            lucide.createIcons();
+            
+            setTimeout(() => msg.remove(), 2500);
+            closeAllDropdowns();
+        }
+
+        function renderCategoryOptions() {
+            const list = document.getElementById('category-options-list');
+            list.innerHTML = UNIQUE_CATEGORIES.map(cat => `
+                <div class="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 rounded cursor-pointer" onclick="toggleCategory('${cat}')">
+                    <input type="checkbox" ${selectedCategories.includes(cat) ? 'checked' : ''} class="w-3.5 h-3.5 rounded text-blue-600 cursor-pointer" onclick="event.stopPropagation(); toggleCategory('${cat}')">
+                    <span class="text-[11px] font-bold text-black">${cat}</span>
+                </div>
+            `).join('');
+            
+            const label = document.getElementById('category-filter-label');
+            if (selectedCategories.length === UNIQUE_CATEGORIES.length) label.innerText = 'All Categories';
+            else if (selectedCategories.length === 0) label.innerText = 'None';
+            else label.innerText = `${selectedCategories.length} Selected`;
+        }
+
+        function toggleCategory(cat) {
+            if (selectedCategories.includes(cat)) selectedCategories = selectedCategories.filter(c => c !== cat);
+            else selectedCategories.push(cat);
+            renderCategoryOptions();
+            renderProducts();
+        }
+
+        function selectAllCategories(val) {
+            selectedCategories = val ? [...UNIQUE_CATEGORIES] : [];
+            renderCategoryOptions();
+            renderProducts();
+        }
+
+        function setTab(tab) {
+            activeTab = tab;
+            document.getElementById('tab-suppliers').className = tab === 'suppliers' ? 'tab-active px-3 py-1 flex items-center gap-1.5 text-[12px] font-bold transition-all' : 'tab-inactive px-3 py-1 flex items-center gap-1.5 text-[12px] font-bold transition-all hover:bg-slate-200 hover:rounded-full';
+            document.getElementById('tab-guides').className = tab === 'guides' ? 'tab-active px-3 py-1 flex items-center gap-1.5 text-[12px] font-bold transition-all' : 'tab-inactive px-3 py-1 flex items-center gap-1.5 text-[12px] font-bold transition-all hover:bg-slate-200 hover:rounded-full';
+            const select = document.getElementById('primary-select');
+            const options = tab === 'suppliers' ? SUPPLIERS : GUIDES;
+            select.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+            currentSelection = options[0];
+            renderProducts();
+        }
+
+        function handleSelectionChange(val) {
+            currentSelection = val;
+            renderProducts();
+        }
+
+        function onQtyChange(productId) {
+            const btn = document.getElementById(`btn-${productId}`);
+            const qtyInput = document.getElementById(`qty-${productId}`);
+            const currentVal = parseInt(qtyInput.value) || 0;
+            const cartItem = cart.find(item => item.id === productId);
+
+            const isUpdateState = cartItem && currentVal !== cartItem.quantity;
+
+            if (isUpdateState) {
+                btn.innerHTML = `<i data-lucide="check" class="w-3 h-3"></i> Update`;
+                btn.className = "inline-flex items-center gap-1 px-3 py-1 bg-purple-600 text-white rounded text-[11px] font-bold";
+            } else {
+                const label = cartItem ? "Added" : "Add";
+                const bgColor = cartItem ? "bg-slate-400" : "bg-blue-600";
+                btn.innerHTML = `<i data-lucide="${cartItem ? 'check' : 'plus'}" class="w-3 h-3"></i> ${label}`;
+                btn.className = `inline-flex items-center gap-1 px-3 py-1 ${bgColor} text-white rounded text-[11px] font-bold`;
+            }
+            lucide.createIcons();
+        }
+
+        function addToCart(productId) {
+            const product = PRODUCTS.find(p => p.id === productId);
+            const qtyInput = document.getElementById(`qty-${productId}`);
+            const qty = parseInt(qtyInput.value) || 0;
+            
+            if (qty <= 0) {
+                cart = cart.filter(item => item.id !== productId);
+            } else {
+                const existing = cart.find(item => item.id === productId);
+                if (existing) existing.quantity = qty;
+                else cart.push({ ...product, quantity: qty });
+            }
+            updateHeaderCart();
+            renderProducts();
+        }
+
+        function addAllSuggested() {
+            const filtered = PRODUCTS.filter(p => {
+                const belongsToTab = activeTab === 'suppliers' ? p.supplier === currentSelection : p.guide === currentSelection;
+                const matchesCategory = selectedCategories.includes(p.category);
+                return belongsToTab && matchesCategory && p.suggestedQty > 0;
+            });
+            filtered.forEach(p => {
+                const existing = cart.find(item => item.id === p.id);
+                if (existing) existing.quantity = p.suggestedQty;
+                else cart.push({ ...p, quantity: p.suggestedQty });
+            });
+            updateHeaderCart();
+            renderProducts();
+        }
+
+        function updateHeaderCart() {
+            const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const count = cart.reduce((sum, item) => sum + item.quantity, 0);
+            document.getElementById('cart-total-header').innerText = `$${total.toFixed(2)}`;
+            document.getElementById('cart-count-header').innerText = `${count} Items`;
+        }
+
+        function updateCartItemQty(productId, newQty) {
+            const qty = parseInt(newQty) || 0;
+            const item = cart.find(i => i.id === productId);
+            if (item) {
+                item.quantity = qty;
+                if (qty <= 0) {
+                    cart = cart.filter(i => i.id !== productId);
+                }
+            }
+            updateHeaderCart();
+            renderReviewView();
+        }
+
+        function renderProducts() {
+            const list = document.getElementById('product-list');
+            const filtered = PRODUCTS.filter(p => {
+                const belongsToTab = activeTab === 'suppliers' ? p.supplier === currentSelection : p.guide === currentSelection;
+                return belongsToTab && selectedCategories.includes(p.category);
+            });
+
+            if (filtered.length === 0) {
+                list.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-slate-400 font-bold">No items found for the selected filter.</td></tr>`;
+                return;
+            }
+
+            list.innerHTML = filtered.map(p => {
+                const cartItem = cart.find(item => item.id === p.id);
+                const displayQty = cartItem ? cartItem.quantity : p.suggestedQty;
+                const btnLabel = cartItem ? "Added" : "Add";
+                const btnColor = cartItem ? "bg-slate-400" : "bg-blue-600";
+
+                return `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-2 text-slate-500 text-[11px] font-bold">${p.category}</td>
+                    <td class="p-2">
+                        <p class="text-[9px] font-black text-slate-400 leading-none">${p.code}</p>
+                        <p class="font-bold text-black italic leading-tight">${p.description}</p>
+                    </td>
+                    <td class="p-2 text-center font-bold text-black">$${p.price.toFixed(2)}</td>
+                    <td class="p-2 text-center">
+                        <span class="on-hand-pill ${p.onHandQty === 0 ? 'on-hand-zero' : 'on-hand-normal'}">${p.onHandLabel}</span>
+                    </td>
+                    <td class="p-2 text-center text-slate-600 font-bold">${p.upt}</td>
+                    <td class="p-2 text-center text-slate-600 font-bold">${p.avgOrder}</td>
+                    <td class="p-2 text-center">
+                        <span class="${p.suggestedQty > 0 ? 'suggested-highlight' : 'text-slate-300'}">${p.suggestedQty}</span>
+                    </td>
+                    <td class="p-2 text-center">
+                        <input type="number" id="qty-${p.id}" value="${displayQty}" 
+                            oninput="onQtyChange(${p.id})"
+                            class="w-12 border border-slate-300 rounded px-1 py-0.5 text-center font-bold text-black outline-none focus:ring-1 focus:ring-purple-200">
+                    </td>
+                    <td class="p-2 text-right">
+                        <button id="btn-${p.id}" onclick="addToCart(${p.id})" class="inline-flex items-center gap-1 px-3 py-1 ${btnColor} text-white rounded text-[11px] font-bold shadow-sm active:scale-95 transition-all">
+                            <i data-lucide="${cartItem ? 'check' : 'plus'}" class="w-3 h-3"></i> ${btnLabel}
+                        </button>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function showReviewScreen() {
+            document.getElementById('view-dashboard').classList.add('hidden');
+            document.getElementById('view-review').classList.remove('hidden');
+            renderReviewView();
+        }
+
+        function showDashboardScreen() {
+            document.getElementById('view-review').classList.add('hidden');
+            document.getElementById('view-dashboard').classList.remove('hidden');
+            renderProducts();
+        }
+
+        function renderReviewView() {
+            const container = document.getElementById('review-container');
+            if (cart.length === 0) {
+                container.innerHTML = `<div class="p-12 text-center bg-white rounded border-dashed border-2 border-slate-200 text-slate-400 font-bold italic">Your cart is currently empty. Go back to Catalog to add items.</div>`;
+                return;
+            }
+            const grouped = cart.reduce((acc, item) => {
+                if (!acc[item.supplier]) acc[item.supplier] = [];
+                acc[item.supplier].push(item);
+                return acc;
+            }, {});
+
+            container.innerHTML = Object.entries(grouped).map(([vendor, items]) => {
+                const vendorTotal = items.reduce((s, i) => s + (i.price * i.quantity), 0);
+                const vendorId = vendor.replace(/\s+/g, '-');
+
+                return `
+                <div class="bg-white rounded border border-slate-200 overflow-hidden shadow-sm mb-4">
+                    <div class="bg-slate-50 px-4 py-2 flex flex-col lg:flex-row lg:items-center gap-4 border-b border-slate-200">
+                        <div class="flex items-center gap-3 min-w-[160px] cursor-pointer" onclick="toggleVendorAccordion('${vendor}')">
+                            <div class="p-2 bg-purple-100 rounded-lg">
+                                <i data-lucide="package" class="w-5 h-5 text-purple-600"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-black text-black uppercase text-[14px] leading-none">${vendor}</h3>
+                                <p class="text-[9px] text-slate-500 font-bold uppercase mt-0.5">${items.length} Items Selected</p>
+                            </div>
+                        </div>
+
+                        <div class="flex-grow grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[8px] font-black text-black uppercase tracking-widest flex items-center gap-1">
+                                    <i data-lucide="calendar" class="w-2.5 h-2.5 text-blue-500"></i> Preferred Delivery Date
+                                </label>
+                                <select class="bg-white border border-slate-300 rounded px-3 py-1 text-[11px] font-black text-black outline-none focus:ring-1 focus:ring-blue-400">
+                                    ${DELIVERY_DATES.map(date => `<option value="${date}">${date}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[8px] font-black text-black uppercase tracking-widest flex items-center gap-1">
+                                    <i data-lucide="message-square" class="w-2.5 h-2.5 text-blue-500"></i> Delivery Instructions
+                                </label>
+                                <input type="text" placeholder="Add a note to supplier..." class="bg-white border border-slate-300 rounded px-3 py-1 text-[11px] font-bold text-black outline-none focus:ring-1 focus:ring-blue-400">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between lg:justify-end gap-6 lg:min-w-[180px]">
+                            <div class="text-right">
+                                <p class="text-[9px] text-slate-500 font-black uppercase leading-none mb-1">Estimated Total</p>
+                                <p class="text-xl font-black text-black leading-none">$${vendorTotal.toFixed(2)}</p>
+                            </div>
+                            <button onclick="toggleVendorAccordion('${vendor}')" id="vendor-icon-${vendorId}" class="p-1.5 hover:bg-slate-200 rounded-full transition-all">
+                                <i data-lucide="chevron-down" class="w-5 h-5 text-black"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="vendor-content-${vendorId}" class="accordion-content expanded">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50/50 border-b border-slate-100">
+                                <tr class="text-[9px] font-black text-black uppercase">
+                                    <th class="px-6 py-2">Item Details</th>
+                                    <th class="px-4 py-2 text-center">Price</th>
+                                    <th class="px-4 py-2 text-center">On Hand</th>
+                                    <th class="px-4 py-2 text-center">Sug. Qty</th>
+                                    <th class="px-4 py-2 text-center">Order Qty</th>
+                                    <th class="px-6 py-2 text-right">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-50">
+                                ${items.map(item => `
+                                    <tr class="text-[12px] text-black hover:bg-slate-50/30 transition-colors">
+                                        <td class="px-6 py-3">
+                                            <p class="text-[8px] font-black text-slate-400 uppercase leading-none mb-1">${item.code}</p>
+                                            <p class="font-bold italic text-black leading-tight">${item.description}</p>
+                                        </td>
+                                        <td class="px-4 py-3 text-center text-slate-600 font-bold">$${item.price.toFixed(2)}</td>
+                                        <td class="px-4 py-3 text-center">
+                                            <span class="on-hand-pill ${item.onHandQty === 0 ? 'on-hand-zero' : 'on-hand-normal'}">${item.onHandLabel}</span>
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            <span class="${item.suggestedQty > 0 ? 'suggested-highlight' : 'text-slate-300'}">${item.suggestedQty}</span>
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            <input type="number" 
+                                                value="${item.quantity}" 
+                                                onchange="updateCartItemQty(${item.id}, this.value)"
+                                                class="w-14 border-2 border-blue-400 bg-blue-50 rounded px-2 py-1 text-center font-black text-black outline-none focus:ring-2 focus:ring-blue-600 transition-all">
+                                        </td>
+                                        <td class="px-6 py-3 text-right font-black text-black">$${(item.price * item.quantity).toFixed(2)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        <div class="bg-slate-50/50 px-6 py-4 flex justify-between items-center border-t border-slate-100">
+                            <div class="flex items-center gap-2">
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <span class="text-[10px] font-bold italic text-slate-500">Please review items before confirming the purchase.</span>
+                            </div>
+                            <button onclick="alert('Confirmed for ${vendor}')" class="px-6 py-2.5 bg-[#0F172A] hover:bg-black text-white rounded font-black text-[13px] flex items-center gap-2 shadow-md active:scale-95 transition-all">
+                                <i data-lucide="send" class="w-4 h-4"></i> Send Order to ${vendor}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                `;}).join('');
+            lucide.createIcons();
+        }
+
+        window.addEventListener('click', (e) => {
+            if (!e.target.closest('#wrench-container') && !e.target.closest('[onclick="toggleCategoryDropdown()"]')) {
+                closeAllDropdowns();
+            }
+        });
+
+        window.onload = () => {
+            initSuggestedOrder();
+            setTab('suppliers');
+        };
+    </script>
+</body>
+</html>
